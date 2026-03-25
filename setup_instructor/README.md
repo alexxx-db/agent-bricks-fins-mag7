@@ -33,7 +33,7 @@ This configuration determines where:
 Open `run_all.ipynb` and run each cell in order. This will:
 
 0. Load your configuration from `config.py`
-1. Set up data tables (ticker data ingestion)
+1. **Run `00_tables_setup.ipynb`** — creates the schema, volume, uploads data files, and builds tables (**required before all other steps**)
 2. Create the Knowledge Assistant with financial documents
 3. Create the Genie Space for SQL queries
 4. Register the Vega-Lite UC Function for visualizations
@@ -50,7 +50,7 @@ Run each notebook in order. Steps 1-4 can be executed independently, but step 5 
 | # | File | What it creates |
 |---|------|----------------|
 | 0 | `../config.py` | **[EDIT FIRST]** Configure catalog, schema, volume names, and supervisor agent name |
-| 1 | Data setup notebook | Ticker data tables in your UC catalog/schema |
+| 1 | `00_tables_setup.ipynb` | **[RUN FIRST]** Creates schema, volume, uploads data files, and builds ticker data tables |
 | 2 | `01_instructor_setup_ka.ipynb` | Knowledge Assistant with financial document sources (10-K, 10-Q, earnings) |
 | 3 | `02_instructor_setup_genie.ipynb` | Genie Space for natural language SQL queries against ticker data |
 | 4 | `03_create_vegalite_uc_function_simple.ipynb` | UC Function for generating Vega-Lite chart specs |

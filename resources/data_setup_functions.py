@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 def create_catalog_and_schema(spark, catalog: str, schema: str):
     """Create catalog and schema if they don't exist."""
     try:
-        # spark.sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
-        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+        # spark.sql(f"CREATE CATALOG IF NOT EXISTS `{catalog}`")
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`")
         logger.info(f"Catalog {catalog} and schema {schema} ensured.")
     except Exception as e:
         logger.error(f"Failed to create catalog or schema: {e}")
@@ -25,8 +25,7 @@ def create_volume(spark, catalog: str, schema: str, volume_name: str):
     """Create Unity Catalog volume if it doesn't exist."""
     try:
         spark.sql(f"""
-            CREATE VOLUME IF NOT EXISTS {catalog}.{schema}.{volume_name}
-            --LOCATION '/Volumes/{catalog}/{schema}/{volume_name}/'
+            CREATE VOLUME IF NOT EXISTS `{catalog}`.`{schema}`.`{volume_name}`
         """)
         logger.info(f"Volume {catalog}.{schema}.{volume_name} ensured.")
     except Exception as e:
@@ -37,7 +36,7 @@ def create_table(spark, catalog: str, schema: str, table: str):
     """Create table for storing document metadata if it doesn't exist."""
     try:
         spark.sql(f"""
-            CREATE TABLE IF NOT EXISTS {catalog}.{schema}.{table} (
+            CREATE TABLE IF NOT EXISTS `{catalog}`.`{schema}`.`{table}` (
                 document_id STRING,
                 file_name STRING,
                 file_path STRING,
@@ -74,7 +73,7 @@ def upload_file_to_volume(spark, local_file_path: str, catalog: str, schema: str
         ], ["document_id", "file_name", "file_path", "upload_timestamp", "file_size", "content_type"])
 
         # Insert metadata into table
-        full_table = f"{catalog}.{schema}.{table}"
+        full_table = f"`{catalog}`.`{schema}`.`{table}`"
         metadata_df.write.mode("append").saveAsTable(full_table)
 
         logger.info(f"Successfully uploaded {file_name} and logged metadata to {full_table}")
@@ -155,17 +154,17 @@ def create_tables_from_volume_subfolders(spark, catalog, schema, volume_name, lo
                 logger.info(f"  Found {len(csv_files)} CSV file(s), creating table {table_name}")
                 csv_path = f"{subfolder_path}*.csv"
                 df = spark.read.format("csv").option("header", "true").option("inferSchema", "true").load(csv_path)
-                full_table_name = f"{catalog}.{schema}.{table_name}"
+                full_table_name = f"`{catalog}`.`{schema}`.`{table_name}`"
                 df.write.mode("overwrite").saveAsTable(full_table_name)
                 logger.info(f"  ✓ Created table {full_table_name} with {df.count()} rows")
             else:
                 # For PDF/document folders, create a table with file metadata using read_files
                 logger.info(f"  Found document files, creating metadata table {table_name}")
                 doc_path = f"{subfolder_path}*"
-                
+
                 # Create table with file metadata
                 df = spark.sql(f"""
-                    SELECT 
+                    SELECT
                         _metadata.file_path as file_path,
                         _metadata.file_name as file_name,
                         _metadata.file_size as file_size,
@@ -173,8 +172,8 @@ def create_tables_from_volume_subfolders(spark, catalog, schema, volume_name, lo
                         '{subfolder_name}' as document_category
                     FROM read_files('{doc_path}')
                 """)
-                
-                full_table_name = f"{catalog}.{schema}.{table_name}"
+
+                full_table_name = f"`{catalog}`.`{schema}`.`{table_name}`"
                 df.write.mode("overwrite").saveAsTable(full_table_name)
                 logger.info(f"  ✓ Created metadata table {full_table_name} with {df.count()} files")
     
@@ -189,7 +188,7 @@ def load_csv_to_table(spark, table: str, url: str, catalog: str, schema: str):
         resp.raise_for_status()
         df = pd.read_csv(io.StringIO(resp.text))
         spark_df = spark.createDataFrame(df)
-        full_table = f"{catalog}.{schema}.{table}"
+        full_table = f"`{catalog}`.`{schema}`.`{table}`"
         spark_df.write.mode("overwrite").saveAsTable(full_table)
         logger.info(f"Successfully wrote table {full_table}")
     except Exception as e:
