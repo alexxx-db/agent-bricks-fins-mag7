@@ -14,6 +14,7 @@ By the end of this lab, you'll have created:
 4. **Multi-Agent Supervisor**: Orchestrates all agents to answer complex financial questions
 5. **Chatbot App**: Full-stack web application with chat UI, persistent history, and Vega-Lite rendering
 6. **(Optional) External MCP Server**: Adds real-time web search capabilities via You.com
+7. **(Optional) GraphRAG MCP Server**: Adds graph-based stock knowledge queries via a Databricks App — no external database required
 
 ## Architecture
 
@@ -38,13 +39,15 @@ By the end of this lab, you'll have created:
                     └──────────────────┬──────────────────────────┘
                                        │
                               (optional)│
-                                       ▼
-                    ┌─────────────────────────────────────────────┐
-                    │      You.com MCP Server (Web Search)       │
-                    │                                           │
-                    │  Real-time web search for current news,   │
-                    │  market updates, and general knowledge    │
-                    └─────────────────────────────────────────────┘
+                    ┌──────────────────┼──────────────────┐
+                    ▼                                     ▼
+     ┌────────────────────────────┐    ┌────────────────────────────┐
+     │ You.com MCP (Web Search)  │    │ GraphRAG MCP (Stock Graph) │
+     │                           │    │                            │
+     │ Real-time news, market    │    │ Company fundamentals,      │
+     │ updates, general search   │    │ trading day graph, streak  │
+     │ (requires You.com API key)│    │ queries (Databricks-native)│
+     └────────────────────────────┘    └────────────────────────────┘
 
                                        │
                                        ▼
@@ -64,6 +67,7 @@ By the end of this lab, you'll have created:
 - Permissions to create catalogs, schemas, volumes, tables, functions, and Agent Bricks
 - Access to the Databricks UI for monitoring and testing Agent Bricks
 - **(Optional)** A [You.com API key](https://documentation.you.com/quickstart#get-your-api-key) for adding web search capabilities via MCP server
+- **(Optional)** Databricks Apps enabled in the workspace for GraphRAG MCP server
 
 ## Setup Scripts Overview
 
@@ -77,6 +81,7 @@ This workshop includes automated setup notebooks in the `setup_instructor/` fold
 - **`04_instructor_setup_sa.ipynb`**: Creates Multi-Agent Supervisor coordinating all agents
 - **`06_deploy_chatbot_app.ipynb`**: Deploys Chatbot App with Lakebase database and all permissions
 - **`05_create_mcp_server_OPTIONAL.ipynb`**: **(Optional)** Adds You.com web search MCP server to the Supervisor
+- **`05b_create_ontobricks_graphrag_OPTIONAL.ipynb`**: **(Optional)** Deploys a GraphRAG MCP server as a Databricks App and wires it into the Supervisor
 
 These notebooks handle the complex configuration automatically, allowing you to focus on testing and understanding the multi-agent workflows.
 
@@ -122,6 +127,12 @@ These notebooks handle the complex configuration automatically, allowing you to 
 20. Attach MCP server to the Supervisor Agent
 21. Test web search capabilities in multi-agent workflows
 
+### Phase 8: GraphRAG MCP Server (Optional)
+22. Build a stock knowledge graph from ticker data as Delta tables
+23. Deploy a FastMCP server as a Databricks App
+24. Create a UC connection and wire it into the Supervisor Agent
+25. Test graph-based queries (company fundamentals, comparisons, trading day lookups)
+
 ---
 
 ## Phase 0: Configuration (REQUIRED FIRST STEP)
@@ -158,6 +169,7 @@ All data, Genie Spaces, and agents will be created in the catalog, schema, and v
    - **Genie Space**: Configured to query `{catalog}.{schema}.ticker_data`
    - **Knowledge Assistant**: Uses documents from the volume path
    - **Multi-Agent Supervisor**: References all agents created in your schema
+   - **(Optional) GraphRAG tables**: `{catalog}.{schema}.graphrag_vertices` and `{catalog}.{schema}.graphrag_edges`
 
 4. **Verify permissions**:
    - Ensure you have `CREATE` permissions on the catalog
@@ -578,7 +590,7 @@ chatbot-app/
 
 This optional phase adds real-time web search capabilities to your Multi-Agent Supervisor using the [You.com](https://you.com) MCP server. Once configured, the Supervisor can search the internet for current news, market updates, and general knowledge to complement its existing document and data analysis capabilities.
 
-### Step 6.1: Prerequisites — Get a You.com API Key
+### Step 7.1: Prerequisites — Get a You.com API Key
 
 1. **Sign up for a You.com account**:
    - Visit [documentation.you.com/quickstart](https://documentation.you.com/quickstart#get-your-api-key)
@@ -587,7 +599,7 @@ This optional phase adds real-time web search capabilities to your Multi-Agent S
 
 2. **Keep your API key handy** — you'll need it to create the Unity Catalog connection in the next step.
 
-### Step 6.2: Create the Unity Catalog Connection
+### Step 7.2: Create the Unity Catalog Connection
 
 Create an HTTP connection in Unity Catalog named `you-mcp` that points to the You.com MCP endpoint:
 
@@ -597,12 +609,12 @@ Create an HTTP connection in Unity Catalog named `you-mcp` that points to the Yo
    - **Connection type**: HTTP
    - **Host**: `https://api.you.com:443/mcp`
    - **Authentication**: Bearer token
-   - **Token**: Your You.com API key from Step 6.1
+   - **Token**: Your You.com API key from Step 7.1
 3. **Grant permissions**: Ensure your user (and any workshop participants) has `USE CONNECTION` permission on the `you-mcp` connection
 
 > **Note**: If a `you-mcp` connection already exists in your workspace, you can skip this step. The setup notebook will use the existing connection.
 
-### Step 6.3: Add the MCP Server to Your Supervisor
+### Step 7.3: Add the MCP Server to Your Supervisor
 
 1. **Open and run the MCP server setup notebook**:
    - File: `setup_instructor/05_create_mcp_server_OPTIONAL.ipynb`
@@ -624,7 +636,7 @@ Create an HTTP connection in Unity Catalog named `you-mcp` that points to the Yo
    - **Chart_Generator** (unity-catalog-function): Vega-Lite visualization
    - **You_Web_Search** (external-mcp-server): You.com web search
 
-### Step 6.4: Test Web Search Capabilities
+### Step 7.4: Test Web Search Capabilities
 
 1. **Wait for the Supervisor to finish updating** (usually under 1 minute)
 
@@ -641,6 +653,77 @@ Create an HTTP connection in Unity Catalog named `you-mcp` that points to the Yo
    - "Search for the latest news about Meta and compare it with what their 10-K filing says about risks"
    - "What are analysts saying about NVIDIA right now? Also show me their recent stock price trend in a chart."
    - "Find current market sentiment for Tesla and compare it with their actual trading volume data"
+   ```
+
+---
+
+## Phase 8: GraphRAG MCP Server (Optional)
+
+This optional phase deploys a **graph-backed Retrieval-Augmented Generation (GraphRAG)** service entirely within Databricks — no external graph database required. The notebook builds a stock knowledge graph from the existing `ticker_data` table, deploys it as a FastMCP server running on a Databricks App, and wires it into the Supervisor Agent via a UC HTTP connection.
+
+### Why GraphRAG?
+
+Graph structures let the Supervisor answer **relationship-centric** questions that are awkward in flat SQL:
+- "What are NVDA's fundamentals and recent trading activity?" → Company node properties + TRADED_ON traversal
+- "Compare AAPL, MSFT, and NVDA side by side" → Multi-node comparison across Company vertices
+- "What does the stock knowledge graph contain?" → Schema-aware introspection
+
+The graph encodes **Company** nodes (7 Mag-7 stocks with fundamentals), **TradingDay** nodes (\~1,750 with prices/volumes/returns), **TRADED_ON** edges (company → trading day ownership), and **NEXT_DAY** edges (temporal chains for streak/momentum queries).
+
+### Step 8.1: Run the GraphRAG Setup Notebook
+
+1. **Open and run the GraphRAG setup notebook**:
+   - File: `setup_instructor/05b_create_ontobricks_graphrag_OPTIONAL.ipynb`
+   - Open in Databricks workspace
+   - Uses serverless compute automatically
+
+2. **What the setup notebook does**:
+   - Loads configuration from `config.py` (all names are parameterized)
+   - Transforms `ticker_data` into graph DataFrames (Company + TradingDay vertices, TRADED_ON + NEXT_DAY edges)
+   - Writes `{catalog}.{schema}.graphrag_vertices` and `{catalog}.{schema}.graphrag_edges` as Delta tables
+   - Generates a FastMCP server app (`main.py`, `app.yaml`, `requirements.txt`)
+   - Deploys the app as `ontobricks-graphrag-{suffix}` via the Databricks Apps REST API
+   - Creates a UC HTTP connection `ontobricks-graphrag-{suffix}` with bearer token auth
+   - Runs smoke tests to verify graph data integrity
+
+3. **Artifacts created**:
+   - **Delta Tables**: `graphrag_vertices` (1,757 rows) and `graphrag_edges` (3,493 rows) in your catalog/schema
+   - **Databricks App**: `ontobricks-graphrag-{suffix}` running a FastMCP server with 3 tools
+   - **UC Connection**: `ontobricks-graphrag-{suffix}` (HTTP + bearer token)
+
+4. **MCP Tools exposed by the app**:
+   - `query_graph(query)` — Natural-language graph queries routed to company lookups, comparisons, or schema info
+   - `get_company_summary(ticker)` — Deep-dive on one company: fundamentals + last 10 trading days
+   - `compare_companies(tickers)` — Side-by-side comparison; pass comma-separated tickers like `"AAPL,MSFT,NVDA"`
+
+### Step 8.2: Wire GraphRAG into the Supervisor
+
+The notebook automatically creates the UC connection. To add it to the Supervisor Agent, either:
+- Re-run **`04_instructor_setup_sa.ipynb`** — it discovers UC connections dynamically and will pick up the new one
+- Or manually add the connection via the Supervisor Agent UI in the workspace
+
+After wiring, the Supervisor will have up to 5 agents (depending on which optional phases you completed):
+- **Financial_Documents_Assistant** (serving-endpoint)
+- **Ticker_Data_Explorer** (genie-space)
+- **Chart_Generator** (unity-catalog-function)
+- **You_Web_Search** (external-mcp-server) — if Phase 7 completed
+- **OntoBricks_GraphRAG** (external-mcp-server) — GraphRAG stock knowledge graph
+
+### Step 8.3: Test GraphRAG Queries
+
+1. **Test graph queries through the Supervisor**:
+   ```
+   - "What are NVIDIA's stock fundamentals?"
+   - "Compare Apple, Microsoft, and Tesla side by side"
+   - "Give me a summary of Meta's recent trading activity"
+   - "What does the stock knowledge graph contain?"
+   ```
+
+2. **Test combined workflows (GraphRAG + existing agents)**:
+   ```
+   - "Use the knowledge graph to compare NVDA and AAPL fundamentals, then create a bar chart visualizing the comparison"
+   - "What does the graph say about Tesla's recent trading? Cross-reference with their 10-K risk factors."
+   - "Get NVIDIA's company summary from the graph and search for the latest analyst opinions to compare"
    ```
 
 ---
@@ -663,6 +746,7 @@ After completing all phases, you should have:
    - **Multi-Agent Supervisor**: `Supervisor_Agent_Mag7` (ONLINE)
    - **Chatbot App**: `agent-bricks-chatbot-workshop` (RUNNING) with Lakebase persistence
    - **(Optional) MCP Server**: `You_Web_Search` via `you-mcp` connection (web search)
+   - **(Optional) GraphRAG MCP**: `ontobricks-graphrag-{suffix}` Databricks App + UC connection (stock knowledge graph)
 
 ### Comprehensive Test Questions
 
@@ -699,12 +783,20 @@ Try these end-to-end test questions with your Multi-Agent Supervisor:
    - "What growth strategies does Meta mention in their reports? Show me how this correlates with their stock performance using a chart."
    ```
 
-5. **Web Search + Multi-Agent** (if Phase 6 completed):
+5. **Web Search + Multi-Agent** (if Phase 7 completed):
    ```
    - "Search for the latest analyst ratings on NVIDIA and compare with what their earnings documents say about growth"
    - "What's in the news about Apple today? Cross-reference with their recent stock price data and create a chart."
    - "Find current market sentiment for the Magnificent 7 stocks and show me their comparative trading volumes"
    - "Search for recent AI industry news and relate it to NVIDIA's latest quarterly performance from their filings"
+   ```
+
+6. **GraphRAG + Multi-Agent** (if Phase 8 completed):
+   ```
+   - "Use the knowledge graph to get NVIDIA's fundamentals and compare with their latest earnings call commentary"
+   - "Compare AAPL, MSFT, and TSLA using the stock graph, then create a visualization of their market caps"
+   - "What does the graph say about Meta's recent trading? Search the web for current analyst sentiment to compare."
+   - "Get a company summary for all Magnificent 7 stocks from the knowledge graph"
    ```
 
 ### Success Criteria
@@ -723,6 +815,8 @@ Your multi-agent system should be able to:
 - ✅ Render Vega-Lite charts directly in the chat UI
 - ✅ **(Optional)** Search the web for real-time information via the You.com MCP server
 - ✅ **(Optional)** Combine web search results with document analysis and data queries
+- ✅ **(Optional)** Query a stock knowledge graph for company fundamentals and trading data via GraphRAG
+- ✅ **(Optional)** Combine graph queries with document analysis, data queries, and visualizations
 
 ---
 
@@ -762,15 +856,25 @@ Your multi-agent system should be able to:
    - **Solution**: Use `dbutils.notebook.run()` instead for cross-notebook execution
    - **Note**: Serverless compute uses IPython magic, not Databricks `%run`
 
-7. **MCP server connection issues** (Phase 6):
+7. **MCP server connection issues** (Phase 7):
    - **Symptom**: "Connection not found" or authentication errors when running `05_create_mcp_server_OPTIONAL`
    - **Solution**: Verify the `you-mcp` Unity Catalog connection exists and is configured with a valid You.com API key
    - **Check**: Navigate to Catalog > External Data > Connections and look for `you-mcp`
    - **API key**: Obtain one at [documentation.you.com/quickstart](https://documentation.you.com/quickstart#get-your-api-key)
 
-8. **Supervisor Agent not found** (Phase 6):
+8. **Supervisor Agent not found** (Phase 7/8):
    - **Symptom**: `AssertionError: Supervisor Agent 'Supervisor_Agent_Mag7' not found`
    - **Solution**: Run Phase 5 first to create the Supervisor, or verify `sa_name` in `config.py` matches the existing Supervisor name
+
+9. **GraphRAG app stays UNAVAILABLE** (Phase 8):
+   - **Symptom**: App state stuck on `UNAVAILABLE` for more than 5 minutes during deployment
+   - **Solution**: Check Compute > Apps in the workspace UI for error details; re-run cell 7 in the 05b notebook
+   - **Note**: First-time app creation takes 2-5 minutes for the container image to build
+
+10. **GraphRAG MCP tools return empty results** (Phase 8):
+    - **Symptom**: MCP tools respond but return no data
+    - **Solution**: Verify `graphrag_vertices` and `graphrag_edges` tables exist and are populated
+    - **Check**: Run `SELECT COUNT(*) FROM {catalog}.{schema}.graphrag_vertices;` — should return 1,757 rows
 
 ### Getting Help
 
@@ -811,7 +915,8 @@ After completing this lab, consider these enhancements:
    - Historical data expansion
 
 5. **Add more external MCP servers**:
-   - If you completed Phase 6, you already have web search via You.com
+   - If you completed Phase 7, you already have web search via You.com
+   - If you completed Phase 8, you have a Databricks-native GraphRAG MCP server
    - Explore additional MCP servers from the [Databricks Marketplace](https://docs.databricks.com/en/generative-ai/mcp/external-mcp/) for more external tool integrations
    - Consider building [custom MCP servers](https://docs.databricks.com/en/generative-ai/mcp/custom-mcp/) hosted as Databricks Apps for organization-specific APIs
 
@@ -830,6 +935,7 @@ agent-bricks-workshop/
 │   ├── 04_instructor_setup_sa.ipynb       # ✅ Multi-Agent Supervisor
 │   ├── 06_deploy_chatbot_app.ipynb        # ✅ Chatbot App + Lakebase deployment
 │   ├── 05_create_mcp_server_OPTIONAL.ipynb  # 🔧 (Optional) You.com MCP server
+│   ├── 05b_create_ontobricks_graphrag_OPTIONAL.ipynb  # 🔧 (Optional) GraphRAG MCP via Databricks App
 │   └── README.md                          # Setup documentation
 ├── chatbot-app/                              # Full-stack chatbot application
 │   ├── client/                            # React + Vite frontend
@@ -854,5 +960,6 @@ agent-bricks-workshop/
 3. **Then**: Run setup notebooks 01-04 in `setup_instructor/` (in order)
 4. **Deploy App**: Run `06_deploy_chatbot_app` to deploy the chatbot with Lakebase
 5. **(Optional)**: Run `05_create_mcp_server_OPTIONAL` after completing step 3 and setting up a `you-mcp` UC connection
+6. **(Optional)**: Run `05b_create_ontobricks_graphrag_OPTIONAL` after completing step 3 (no external API key required)
 
-**Congratulations!** You've built a comprehensive financial analysis multi-agent system that can analyze documents, query data, generate visualizations, search the web, and coordinate complex analytical workflows.
+**Congratulations!** You've built a comprehensive financial analysis multi-agent system that can analyze documents, query data, generate visualizations, search the web, query a stock knowledge graph, and coordinate complex analytical workflows.
