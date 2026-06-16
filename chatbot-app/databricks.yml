@@ -14,6 +14,12 @@ variables:
   app_name:
     description: "Name of the Databricks App"
     default: "agent-bricks-chatbot"
+  # ── Pro mode (OPTIONAL) ──────────────────────────────────────────────────
+  # Name of the SQL warehouse the app reads graph/ticker tables from. Only used
+  # when the PRO MODE warehouse resource below is uncommented (pro deploys).
+  warehouse_name:
+    description: "Name of the SQL warehouse used by the pro-mode Graph/Data tabs"
+    default: ""
 
 resources:
   database_instances:
@@ -38,6 +44,14 @@ resources:
             database_name: databricks_postgres
             instance_name: ${resources.database_instances.chatbot_lakebase.name}
             permission: CAN_CONNECT_AND_CREATE
+        # PRO MODE WAREHOUSE: uncomment to grant the app CAN_USE on the SQL
+        # warehouse that backs the Graph + Data Explorer tabs. The pro deploy
+        # notebook (06b) sets var.warehouse_name and uncomments this for you.
+        # - name: sql-warehouse
+        #   description: "SQL warehouse for pro-mode graph/ticker queries"
+        #   sql_warehouse:
+        #     name: ${var.warehouse_name}
+        #     permission: CAN_USE
 
 targets:
   dev:

@@ -4,3 +4,28 @@ runtime: nodejs20
 env:
   - name: DATABRICKS_SERVING_ENDPOINT
     valueFrom: serving-endpoint
+
+  # ── Pro mode (OPTIONAL) ──────────────────────────────────────────────────
+  # APP_MODE toggles the richer experience. Defaults to "simple"; the pro
+  # deploy notebook rewrites these values from config.py. Empty values keep
+  # the corresponding pro feature disabled, so simple deploys are unaffected.
+  - name: APP_MODE
+    value: "simple"
+  # SQL warehouse id used to read graphrag_* and ticker_data tables.
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: ""
+  # Catalog/schema holding the graph + ticker tables.
+  - name: GRAPH_CATALOG
+    value: ""
+  - name: GRAPH_SCHEMA
+    value: ""
+  # Embedded Genie space (Dashboard tab). Provide an id or an explicit URL.
+  - name: GENIE_SPACE_ID
+    value: ""
+  - name: GENIE_EMBED_URL
+    value: ""
+  # Embedded AI/BI dashboard (Dashboard tab).
+  - name: AIBI_DASHBOARD_ID
+    value: ""
+  - name: AIBI_EMBED_URL
+    value: ""

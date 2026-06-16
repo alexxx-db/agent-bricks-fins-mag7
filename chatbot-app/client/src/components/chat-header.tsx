@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useSidebar } from './ui/sidebar';
 import { PlusIcon, CloudOffIcon } from 'lucide-react';
 import { useConfig } from '@/hooks/use-config';
+import { WorkspacePanelToggle } from '@/components/workspace-panel/workspace-panel-toggle';
 import {
   Tooltip,
   TooltipContent,
@@ -52,6 +53,10 @@ export function ChatHeader() {
           </Tooltip>
         </TooltipProvider>
       )}
+
+      <div className="ml-auto flex items-center gap-2">
+        <WorkspacePanelToggle />
+      </div>
     </header>
   );
 }

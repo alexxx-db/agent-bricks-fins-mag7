@@ -80,6 +80,7 @@ This workshop includes automated setup notebooks in the `setup_instructor/` fold
 - **`03_create_vegalite_uc_function_simple.ipynb`**: Creates Unity Catalog visualization function
 - **`04_instructor_setup_sa.ipynb`**: Creates Multi-Agent Supervisor coordinating all agents
 - **`06_deploy_chatbot_app.ipynb`**: Deploys Chatbot App with Lakebase database and all permissions
+- **`06b_deploy_chatbot_app_pro_OPTIONAL.ipynb`**: **(Optional)** Switches the app into **pro mode** — adds an interactive knowledge-graph view, a data explorer, an embedded Genie + AI/BI dashboard, and a richer multi-agent "thinking" stream (requires `05b`)
 - **`05_create_mcp_server_OPTIONAL.ipynb`**: **(Optional)** Adds You.com web search MCP server to the Supervisor
 - **`05b_create_ontobricks_graphrag_OPTIONAL.ipynb`**: **(Optional)** Deploys a GraphRAG MCP server as a Databricks App and wires it into the Supervisor
 
