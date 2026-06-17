@@ -21,6 +21,28 @@ but has some [known limitations](#known-limitations) for other use cases. Work i
 - **Databricks Agent and Foundation Model Integration**: Direct connection to Databricks Agent serving endpoints and Agent Bricks
 - **Databricks Authentication**: Uses Databricks authentication to identify end users of the chat app and securely manage their conversations.
 - **Persistent Chat History (Optional)**: Leverages Databricks Lakebase (Postgres) for storing conversations, with governance and tight lakehouse integration. Can also run in ephemeral mode without database.
+- **Pro mode (Optional)**: Set `APP_MODE=pro` to unlock a dockable workspace panel alongside the chat — an interactive knowledge graph (Sigma.js over the OntoBricks GraphRAG tables), a data explorer with charts + KPI tiles, and an embedded Genie space + AI/BI dashboard — plus an animated multi-agent "thinking" indicator during long queries. Defaults to `simple` (chat only).
+
+### Pro mode configuration
+
+Pro mode reads these environment variables (see `.env.example`); each feature is
+independently gated, so a partially-configured deploy degrades gracefully:
+
+| Variable | Purpose |
+|----------|---------|
+| `APP_MODE` | `pro` to enable the workspace panel; `simple` (default) for chat only |
+| `DATABRICKS_WAREHOUSE_ID` | SQL warehouse for the Graph + Data Explorer tabs |
+| `GRAPH_CATALOG` / `GRAPH_SCHEMA` | Location of `graphrag_vertices`, `graphrag_edges`, `ticker_data` |
+| `GENIE_SPACE_ID` / `GENIE_EMBED_URL` | Embedded Genie space (id or explicit published embed URL) |
+| `AIBI_DASHBOARD_ID` / `AIBI_EMBED_URL` | Embedded AI/BI dashboard (id or explicit published embed URL) |
+
+New pro-mode API endpoints (server): `GET /api/graph` (node/edge data) and
+`GET /api/series`, `/api/series/meta`, `/api/series/summary` (ticker time series + KPIs).
+`GET /api/config` advertises which pro features are available to the client.
+
+For a workshop deployment, prefer the `06b_deploy_chatbot_app_pro_OPTIONAL` notebook,
+which resolves these values, grants the app service principal the needed read
+permissions, and redeploys.
 
 ## Prerequisites
 

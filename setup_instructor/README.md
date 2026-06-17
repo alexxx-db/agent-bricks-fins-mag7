@@ -57,7 +57,41 @@ Run each notebook in order. Steps 1-4 can be executed independently, but step 5 
 | 4b | `03b_create_youdotcom_uc_functions.ipynb` | **(Optional)** You.com web search, content extraction, and research UC functions |
 | 5 | `04_instructor_setup_sa.ipynb` | Multi-Agent Supervisor that orchestrates all three bricks above |
 | 6 | `06_deploy_chatbot_app.ipynb` | Chatbot App with Lakebase DB, connected to the Supervisor Agent |
+| 6b | `06b_deploy_chatbot_app_pro_OPTIONAL.ipynb` | **(Optional)** Switches the app to **pro mode** — knowledge-graph view, data explorer, embedded Genie + AI/BI dashboard, and a richer multi-agent "thinking" stream |
 | 7 | `05_create_mcp_server_OPTIONAL.ipynb` | **(Optional)** Adds You.com web search MCP server to the Supervisor |
+
+### Pro mode (optional, more fully-featured app)
+
+The chatbot app ships in two flavors, selected by `app_mode` in `../config.py`
+(`"simple"` by default). **Simple** is the chat-only experience. **Pro** adds a dockable
+workspace panel with:
+
+- an **interactive knowledge graph** (Vega force-directed) over the OntoBricks GraphRAG tables,
+- a **data explorer** with charts + KPI tiles over `ticker_data`,
+- an **embedded Genie space + AI/BI dashboard**, and
+- an animated **multi-agent "thinking"** indicator during long queries.
+
+To enable it: deploy the app with `06`, run `05b` (graph tables + UC functions),
+(optionally) run `03c_create_aibi_dashboard_OPTIONAL` (creates + publishes the AI/BI
+dashboard for the Dashboard tab), then run `06b_deploy_chatbot_app_pro_OPTIONAL`. That
+notebook resolves the SQL warehouse, Genie space, and AI/BI dashboard, writes the pro
+environment into the app, grants the app service principal the needed read permissions,
+and redeploys. Set `sql_warehouse_id`, `genie_space_id`/`genie_embed_url`, and
+`aibi_dashboard_id`/`aibi_embed_url` in `config.py` to pin exactly what is used/embedded.
+
+> **Embedding (Dashboard tab):** to render the AI/BI dashboard inside the app, a
+> workspace admin must allow the app domain: **Settings → Security → Embed dashboards →
+> Allow approved domains → add `*.databricksapps.com`** (governs dashboards and Genie).
+> The published AI/BI dashboard then embeds via `/embed/dashboardsv3/<id>`. Note: the
+> interactive Genie *room* page is not iframe-embeddable, so the Dashboard tab offers an
+> "Open ↗" launch link for Genie alongside the embedded AI/BI dashboard.
+
+> **GraphRAG note:** `05b` builds the `graphrag_*` tables (used by the pro Graph tab) and
+> creates two **SQL UC functions** (`get_company_summary`, `compare_companies`) that the
+> Supervisor uses as tools (wired in by `04`, granted by `06`). This replaces the earlier
+> external-MCP-server-on-Apps approach, which is unusable through the Agent Bricks MCP
+> proxy on streaming requests (`httpx.ResponseNotRead`; tracked in ML-63338). SQL UC
+> function tools register reliably, exactly like the chart and web-search tools.
 
 Steps 2-4 are independent and can be run in any order. Step 4b is optional and adds web search capabilities via You.com UC functions (requires a free API key — see below). Step 5 discovers the artifacts from steps 2-4 automatically by name. Step 6 deploys the chatbot app and requires the Supervisor from step 5. Step 7 is optional and requires the Supervisor from step 5 to already exist.
 

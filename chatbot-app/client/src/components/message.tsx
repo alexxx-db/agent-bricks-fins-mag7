@@ -29,6 +29,12 @@ import { MessageError } from './message-error';
 import { Streamdown } from 'streamdown';
 import { DATABRICKS_TOOL_CALL_ID } from '@chat-template/ai-sdk-providers/tools';
 import { VegaChart } from './VegaChart';
+import {
+  InlineGraphArtifact,
+  tryParseGraphData,
+} from './graph/inline-graph';
+import { AgentActivity } from './agent-activity';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 
 const PurePreviewMessage = ({
   message,
@@ -207,6 +213,13 @@ const PurePreviewMessage = ({
               // FIX: Check if the tool name INCLUDES the function name, not equals
               const isChartTool = toolName?.includes('generate_vega_lite_spec');
 
+              // Detect a graph-shaped tool output ({nodes, edges}) so graph
+              // artifacts render inline. Non-graph outputs return null here.
+              const graphData =
+                state === 'output-available' && !errorText && output
+                  ? tryParseGraphData(output)
+                  : null;
+
               return (
                 <Tool key={toolCallId} defaultOpen={true}>
                   <ToolHeader type={toolName || 'tool-call'} state={state} />
@@ -225,6 +238,8 @@ const PurePreviewMessage = ({
                               }
                             />
                           </div>
+                        ) : graphData ? (
+                          <InlineGraphArtifact data={graphData} />
                         ) : (
                           /* Fallback for other tools */
                           <ToolOutput
@@ -310,6 +325,7 @@ export const PreviewMessage = memo(
 
 export const AwaitingResponseMessage = () => {
   const role = 'assistant';
+  const { proEnabled } = useAppConfig();
 
   return (
     <div
@@ -321,9 +337,13 @@ export const AwaitingResponseMessage = () => {
         <AnimatedAssistantIcon size={14} isLoading={false} muted={true} />
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="p-0 text-muted-foreground text-sm">
-            <LoadingText>Thinking...</LoadingText>
-          </div>
+          {proEnabled ? (
+            <AgentActivity />
+          ) : (
+            <div className="p-0 text-muted-foreground text-sm">
+              <LoadingText>Thinking...</LoadingText>
+            </div>
+          )}
         </div>
       </div>
     </div>

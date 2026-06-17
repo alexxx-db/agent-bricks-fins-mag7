@@ -2,9 +2,13 @@ import { Outlet } from 'react-router-dom';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useSession } from '@/contexts/SessionContext';
+import { useAppConfig } from '@/contexts/AppConfigContext';
+import { WorkspacePanelProvider } from '@/contexts/WorkspacePanelContext';
+import { WorkspacePanel } from '@/components/workspace-panel/workspace-panel';
 
 export default function ChatLayout() {
   const { session, loading } = useSession();
+  const { proEnabled } = useAppConfig();
   const isCollapsed = localStorage.getItem('sidebar:state') !== 'true';
 
   // Wait for session to load
@@ -33,12 +37,26 @@ export default function ChatLayout() {
   // Get preferred username from session (if available from headers)
   const preferredUsername = session.user.preferredUsername ?? null;
 
+  // The WorkspacePanelProvider is always mounted so the header toggle's hooks
+  // are valid, but the panel + split layout only render in pro mode. Simple
+  // mode renders exactly as before.
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>
-      <AppSidebar user={session.user} preferredUsername={preferredUsername} />
-      <SidebarInset>
-        <Outlet />
-      </SidebarInset>
+      <WorkspacePanelProvider>
+        <AppSidebar user={session.user} preferredUsername={preferredUsername} />
+        <SidebarInset>
+          {proEnabled ? (
+            <div className="flex h-dvh min-h-0 w-full overflow-hidden">
+              <div className="relative flex min-w-0 flex-1 flex-col">
+                <Outlet />
+              </div>
+              <WorkspacePanel />
+            </div>
+          ) : (
+            <Outlet />
+          )}
+        </SidebarInset>
+      </WorkspacePanelProvider>
     </SidebarProvider>
   );
 }
