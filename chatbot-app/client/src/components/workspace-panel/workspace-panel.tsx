@@ -155,7 +155,8 @@ export function WorkspacePanel() {
             </Button>
           </div>
 
-          {/* Active view */}
+          {/* Active view. The aside's h-dvh makes this flex-1 box a definite
+              height, so the canvas/iframe children fill the panel. */}
           <div className={cn('min-h-0 flex-1 overflow-hidden')}>
             {effectiveTab === 'graph' && (
               <GraphView focusEntity={focus?.entity} />

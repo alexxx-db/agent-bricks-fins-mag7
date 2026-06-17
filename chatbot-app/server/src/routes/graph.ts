@@ -44,19 +44,28 @@ interface GraphEdge {
   source: string;
   target: string;
   type: string;
+  weight?: number | null;
 }
 
+// Hub node types that group/relate companies (added by the enrichment step in
+// the GraphRAG notebook): a MAG7 index, sectors, beta tiers, valuation tiers.
+const HUB_TYPES = ['Index', 'Sector', 'BetaTier', 'ValuationTier'];
+
 const NODE_COLS =
-  'id, type, ticker, prop_market_cap, prop_beta, prop_pe_trailing, ' +
+  'id, type, ticker, name, prop_market_cap, prop_beta, prop_pe_trailing, ' +
   'prop_pe_forward, prop_ev_ebitda, prop_date, prop_price_close, ' +
   'prop_volume, prop_daily_return';
 
 function toNode(r: Record<string, string | null>): GraphNode {
-  const isCompany = r.type === 'Company';
+  const type = r.type ?? 'Unknown';
+  let label: string;
+  if (type === 'Company') label = r.ticker ?? r.id ?? '';
+  else if (type === 'TradingDay') label = r.prop_date ?? r.id ?? '';
+  else label = r.name ?? r.id ?? '';
   return {
     id: r.id ?? '',
-    type: r.type ?? 'Unknown',
-    label: isCompany ? (r.ticker ?? r.id ?? '') : (r.prop_date ?? r.id ?? ''),
+    type,
+    label,
     ticker: r.ticker ?? null,
     props: {
       market_cap: r.prop_market_cap,
@@ -109,26 +118,29 @@ graphRouter.get('/', requireAuth, async (req: Request, res: Response) => {
       focusTicker = lookup.records[0]?.ticker ?? null;
     }
 
+    // Always include the company-level scaffold: every Company node plus the
+    // hub nodes (index / sectors / beta + valuation tiers). These give the graph
+    // multiple centers of gravity and surface the cross-company relationships.
+    const hubList = HUB_TYPES.map((t) => `'${t}'`).join(',');
+    const scaffold = await executeSql(
+      `SELECT ${NODE_COLS} FROM ${vertices} ` +
+        `WHERE type = 'Company' OR type IN (${hubList})`,
+    );
+    nodes.push(...scaffold.records.map(toNode));
+
     if (focusTicker) {
-      // Company subgraph: the company node + its recent trading days.
-      const company = await executeSql(
-        `SELECT ${NODE_COLS} FROM ${vertices} WHERE type = 'Company' AND ticker = :t`,
-        [{ name: 't', value: focusTicker, type: 'STRING' }],
-      );
+      // Focus: add the focused company's recent trading days (its detail layer).
       // `limit` is a zod-validated integer (server-controlled), safe to inline.
       const days = await executeSql(
         `SELECT ${NODE_COLS} FROM ${vertices} WHERE type = 'TradingDay' AND ticker = :t ` +
           `ORDER BY prop_date DESC LIMIT ${limit}`,
         [{ name: 't', value: focusTicker, type: 'STRING' }],
       );
-      nodes.push(...company.records.map(toNode), ...days.records.map(toNode));
+      nodes.push(...days.records.map(toNode));
     } else {
-      // Overview: all companies + recent K days each.
-      const perCompany = Math.max(5, Math.floor(limit / 7));
-      const companies = await executeSql(
-        `SELECT ${NODE_COLS} FROM ${vertices} WHERE type = 'Company'`,
-      );
-      // perCompany is derived from the validated `limit`; safe to inline.
+      // Overview: a small sample of recent days per company so the day chains
+      // are visible without burying the company-level web.
+      const perCompany = Math.max(4, Math.min(12, Math.floor(limit / 12)));
       const recentDays = await executeSql(
         `SELECT ${NODE_COLS} FROM (` +
           `  SELECT ${NODE_COLS}, ROW_NUMBER() OVER ` +
@@ -136,25 +148,24 @@ graphRouter.get('/', requireAuth, async (req: Request, res: Response) => {
           `  FROM ${vertices} WHERE type = 'TradingDay'` +
           `) WHERE rn <= ${perCompany}`,
       );
-      nodes.push(
-        ...companies.records.map(toNode),
-        ...recentDays.records.map(toNode),
-      );
+      nodes.push(...recentDays.records.map(toNode));
     }
 
     // Edges: fetch all (table is small) and keep only those fully inside the
-    // selected node set.
+    // selected node set. weight carries the correlation strength.
     const nodeIds = new Set(nodes.map((n) => n.id));
     const allEdges = await executeSql(
-      `SELECT src, dst, relationship FROM ${edges}`,
+      `SELECT src, dst, relationship, weight FROM ${edges}`,
     );
     const graphEdges: GraphEdge[] = [];
     for (const e of allEdges.records) {
       if (e.src && e.dst && nodeIds.has(e.src) && nodeIds.has(e.dst)) {
+        const w = e.weight === null || e.weight === undefined ? null : Number(e.weight);
         graphEdges.push({
           source: e.src,
           target: e.dst,
           type: e.relationship ?? 'RELATED',
+          weight: Number.isFinite(w as number) ? w : null,
         });
       }
     }
